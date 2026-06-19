@@ -106,7 +106,7 @@ After proposal generation, a separate worker creates a **Client Brief Card** - a
 ### 1. Clone and Install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/ParzivalXIII/proposal-draft-agent.git
 cd proposal-draft-agent
 
 # Install Python dependencies
