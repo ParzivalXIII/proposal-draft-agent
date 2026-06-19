@@ -1,0 +1,33 @@
+<div id="proposal-list"
+     hx-get="/ui/proposals/fragment"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML">
+    <div class="overflow-hidden bg-white shadow sm:rounded-md">
+        <ul role="list" class="divide-y divide-gray-200">
+            {% for p in proposals %}
+            <li>
+                <a href="/ui/proposals/{{ p.id }}" class="block hover:bg-gray-50 px-4 py-4 sm:px-6">
+                    <div class="flex items-center justify-between">
+                        <p class="truncate text-sm font-medium text-indigo-600">{{ p.client_name }}</p>
+                        <div class="flex items-center gap-2">
+                            {% if p.brief_card %}
+                            <span class="inline-flex items-center rounded-full bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">
+                                Brief Card Ready
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium 
+                                {% if p.status == 'completed' %}bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20
+                                {% elif p.status == 'running' %}bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-700/10
+                                {% elif p.status == 'failed' %}bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/10
+                                {% else %}bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-500/10{% endif %}">
+                                {{ p.status | capitalize }}
+                            </span>
+                        </div>
+                    </div>
+                    <p class="mt-1 truncate text-sm text-gray-500">{{ p.problem_description }}</p>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>

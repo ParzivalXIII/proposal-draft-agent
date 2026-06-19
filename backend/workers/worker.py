@@ -22,32 +22,56 @@ proposal_graph = build_proposal_graph(real_llm)
 
 async def startup(ctx):
     ctx['db_engine'] = create_async_engine(settings.database_url, echo=False)
+    # Create ARQ pool for inter-job communication
+    from arq import create_pool
+    from arq.connections import RedisSettings
+    ctx['arq_pool'] = await create_pool(RedisSettings(host=settings.redis_host, port=settings.redis_port))
 
 async def shutdown(ctx):
     await ctx['db_engine'].dispose()
+    await ctx['arq_pool'].close()
 
 async def generate_proposal(ctx, proposal_id: str):
-    # ... (Keep the existing generate_proposal function exactly as it was) ...
     logger.info(f"Starting proposal generation for {proposal_id}")
     engine = ctx['db_engine']
+    
     async with AsyncSession(engine, expire_on_commit=False) as session:
         proposal = await session.get(Proposal, proposal_id)
-        if not proposal: raise ValueError(f"Proposal {proposal_id} not found")
+        if not proposal:
+            raise ValueError(f"Proposal {proposal_id} not found")
+            
         proposal.status = ProposalStatus.RUNNING
         proposal.updated_at = datetime.now(timezone.utc)
         session.add(proposal)
         await session.commit()
+        
         try:
-            brief = BriefInput(client_name=proposal.client_name, problem_description=proposal.problem_description, rough_scope=proposal.rough_scope)
-            initial_state = ProposalState(brief=brief, draft=None, critique=None, final_proposal=None, total_hours=None, complexity_tier=None, retry_count=0)
+            brief = BriefInput(
+                client_name=proposal.client_name,
+                problem_description=proposal.problem_description,
+                rough_scope=proposal.rough_scope
+            )
+            
+            initial_state = ProposalState(
+                brief=brief, draft=None, critique=None, final_proposal=None, 
+                total_hours=None, complexity_tier=None, retry_count=0
+            )
+            
             final_state = await proposal_graph.ainvoke(initial_state)
             result = final_state["final_proposal"]
+            
             proposal.status = ProposalStatus.COMPLETED
             proposal.client_summary = result.client_summary
             proposal.technical_proposal = result.technical_proposal
             proposal.features_json = json.dumps([f.model_dump() for f in result.feature_breakdown])
             proposal.total_hours = final_state["total_hours"]
             proposal.complexity_tier = final_state["complexity_tier"]
+            
+            # Auto-trigger brief card generation
+            arq_pool = ctx['arq_pool']
+            await arq_pool.enqueue_job('generate_brief_card', proposal_id)
+            logger.info(f"Auto-triggered brief card generation for {proposal_id}")
+            
         except Exception as e:
             logger.exception("Proposal generation failed")
             proposal.status = ProposalStatus.FAILED
