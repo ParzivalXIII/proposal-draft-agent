@@ -118,23 +118,30 @@ npm install
 
 ### 2. Configure Environment
 
-Create a `.env` file:
+Copy the example file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your settings:
 
 ```bash
 # Required: OpenAI API configuration
 OPENAI_API_KEY=your-api-key-here
 
 # Optional: Custom API endpoint (e.g., local proxy, Ollama)
-OPENAI_BASE_URL=https://api.openai.com/v1
-# OPENAI_BASE_URL=http://localhost:11434/v1  # Ollama example
+# OPENAI_BASE_URL=http://localhost:11434/v1
 
 # Optional: Model selection
-LLM_MODEL_NAME=gpt-4o-mini
+# LLM_MODEL_NAME=gpt-4o-mini
 
 # Redis configuration
-REDIS_HOST=localhost
-REDIS_PORT=6380
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
 ```
+
+See `.env.example` for all available options with documentation.
 
 ### 3. Start Redis
 
@@ -229,15 +236,16 @@ Response:
 
 ## Configuration
 
-All configuration is managed via environment variables (see `.env`):
+All configuration is managed via environment variables in `.env` (see `.env.example` for a template):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | Yes | - | API key for LLM provider |
-| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Custom API endpoint |
-| `LLM_MODEL_NAME` | No | `gpt-4o-mini` | Model to use for generation |
+| `OPENAI_API_KEY` | **Yes** | — | API key for LLM provider |
+| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | Custom API endpoint (Ollama, proxy, etc.) |
+| `LLM_MODEL_NAME` | No | Provider default | Model to use for generation |
+| `LLM_TEMPERATURE` | No | `0.2` | LLM temperature (0.0–2.0) |
 | `REDIS_HOST` | No | `localhost` | Redis host |
-| `REDIS_PORT` | No | `6380` | Redis port |
+| `REDIS_PORT` | No | `6379` | Redis port |
 | `DATABASE_URL` | No | `sqlite+aiosqlite:///./proposal_agent.db` | Database connection string |
 
 ## Project Structure
