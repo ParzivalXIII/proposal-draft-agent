@@ -157,3 +157,12 @@ cython_debug/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# User
+.sisyphus/
+
+# Node
+node_modules/
+
+# Playwright
+.playwright-mcp/

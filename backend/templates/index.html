@@ -1,38 +1,182 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-8 bg-white p-6 rounded-lg shadow">
-    <h1 class="text-2xl font-bold text-gray-900 mb-4">Create New Proposal</h1>
-    <form hx-post="/ui/proposals" hx-swap="none" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Client Name</label>
-            <input type="text" name="client_name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Problem Description</label>
-            <textarea name="problem_description" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows="2"></textarea>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Rough Scope</label>
-            <textarea name="rough_scope" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border" rows="2"></textarea>
-        </div>
-        <div class="sm:col-span-3">
-            <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-                Generate Proposal
-            </button>
-        </div>
+{# ── Extra Alpine data for form validation (defined outside polled region) ── #}
+<script>
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('proposalForm', function() {
+            return {
+                fields: {
+                    client_name: '',
+                    problem_description: '',
+                    rough_scope: ''
+                },
+                errors: {
+                    client_name: '',
+                    problem_description: '',
+                    rough_scope: ''
+                },
+                submitted: false,
+
+                get isValid() {
+                    return !this.errors.client_name
+                        && !this.errors.problem_description
+                        && !this.errors.rough_scope
+                        && this.fields.client_name.length >= 2
+                        && this.fields.problem_description.length >= 10
+                        && this.fields.rough_scope.length >= 10;
+                },
+
+                validateField(field) {
+                    var val = this.fields[field] || '';
+                    var len = val.length;
+                    switch(field) {
+                        case 'client_name':
+                            this.errors.client_name = len === 0 ? 'Client name is required.'
+                                : len < 2 ? 'Must be at least 2 characters.'
+                                : len > 100 ? 'Must be 100 characters or less.'
+                                : '';
+                            break;
+                        case 'problem_description':
+                            this.errors.problem_description = len === 0 ? 'Problem description is required.'
+                                : len < 10 ? 'Must be at least 10 characters.'
+                                : len > 2000 ? 'Must be 2000 characters or less.'
+                                : '';
+                            break;
+                        case 'rough_scope':
+                            this.errors.rough_scope = len === 0 ? 'Rough scope is required.'
+                                : len < 10 ? 'Must be at least 10 characters.'
+                                : len > 2000 ? 'Must be 2000 characters or less.'
+                                : '';
+                            break;
+                    }
+                },
+
+                validate() {
+                    this.validateField('client_name');
+                    this.validateField('problem_description');
+                    this.validateField('rough_scope');
+                    return this.isValid;
+                },
+
+                handleSubmit() {
+                    if (!this.validate()) return false;
+                    this.submitted = true;
+                    return true;
+                }
+            };
+        });
+    });
+</script>
+
+{# ── Modal: New Proposal ── #}
+<dialog id="proposalModal" class="modal" x-data="proposalForm" x-effect="if(!$el.open) { submitted = false; }">
+    <div class="modal-box">
+        <h3 class="text-lg font-bold mb-4">Create New Proposal</h3>
+        <form hx-post="/ui/proposals"
+              hx-swap="none"
+              @submit.prevent="handleSubmit() ? $el.dispatchEvent(new Event('submit', {bubbles: false})) : null"
+              method="dialog">
+            {# ── Client Name ── #}
+            <fieldset class="fieldset mb-4">
+                <legend class="fieldset-legend">Client Name</legend>
+                <input type="text"
+                       name="client_name"
+                       class="input w-full"
+                       x-model="fields.client_name"
+                       @input.debounce="validateField('client_name')"
+                       @blur="validateField('client_name')"
+                       maxlength="100"
+                       required
+                       placeholder="e.g. Acme Corp">
+                <span class="label" x-show="errors.client_name" x-cloak>
+                    <span class="label-text-alt text-error" x-text="errors.client_name"></span>
+                </span>
+            </fieldset>
+
+            {# ── Problem Description ── #}
+            <fieldset class="fieldset mb-4">
+                <legend class="fieldset-legend">Problem Description</legend>
+                <textarea name="problem_description"
+                          class="textarea w-full"
+                          rows="3"
+                          x-model="fields.problem_description"
+                          @input.debounce="validateField('problem_description')"
+                          @blur="validateField('problem_description')"
+                          maxlength="2000"
+                          required
+                          placeholder="Describe the business problem..."></textarea>
+                <span class="label" x-show="errors.problem_description" x-cloak>
+                    <span class="label-text-alt text-error" x-text="errors.problem_description"></span>
+                </span>
+                <span class="label">
+                    <span></span>
+                    <span class="label-text-alt" x-text="fields.problem_description.length + '/2000'"></span>
+                </span>
+            </fieldset>
+
+            {# ── Rough Scope ── #}
+            <fieldset class="fieldset mb-6">
+                <legend class="fieldset-legend">Rough Scope</legend>
+                <textarea name="rough_scope"
+                          class="textarea w-full"
+                          rows="3"
+                          x-model="fields.rough_scope"
+                          @input.debounce="validateField('rough_scope')"
+                          @blur="validateField('rough_scope')"
+                          maxlength="2000"
+                          required
+                          placeholder="Initial thoughts on features or requirements..."></textarea>
+                <span class="label" x-show="errors.rough_scope" x-cloak>
+                    <span class="label-text-alt text-error" x-text="errors.rough_scope"></span>
+                </span>
+                <span class="label">
+                    <span></span>
+                    <span class="label-text-alt" x-text="fields.rough_scope.length + '/2000'"></span>
+                </span>
+            </fieldset>
+
+            <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('proposalModal').close()">Cancel</button>
+                <button type="submit" class="btn btn-primary" :disabled="!isValid || submitted">
+                    <span x-show="!submitted">Generate Proposal</span>
+                    <span x-show="submitted" x-cloak>
+                        <span class="loading loading-spinner loading-xs"></span> Submitting...
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+    {# ── Backdrop click closes modal ── #}
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
     </form>
+</dialog>
+
+{# ── Page Heading (below modal trigger) ── #}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-base-content">Proposals</h1>
+    <p class="text-base-content/60 text-sm mt-1">Create and manage proposal drafts for your clients.</p>
 </div>
 
-<div>
-    <h2 class="text-xl font-bold text-gray-900 mb-4">Recent Proposals</h2>
-    
-    <!-- NEW: HTMX polling container for the proposal list -->
-    <div id="proposal-list"
-         hx-get="/ui/proposals/fragment"
-         hx-trigger="every 3s"
-         hx-swap="outerHTML">
-        {% include "fragments/proposal_list.html" %}
-    </div>
+{# ── HTMX polling container for the proposal list ── #}
+<div id="proposal-list"
+     hx-get="/ui/proposals/fragment"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML">
+    {% include "fragments/proposal_list.html" %}
 </div>
+
+{# ── Listen for proposal creation event (from T6 stay-on-page) ── #}
+<script>
+    document.addEventListener('proposalCreated', function() {
+        // Close modal
+        var modal = document.getElementById('proposalModal');
+        if (modal) modal.close();
+        // Refresh proposal list
+        if (typeof htmx !== 'undefined') {
+            htmx.trigger('#proposal-list', 'refresh');
+        }
+    });
+</script>
 {% endblock %}

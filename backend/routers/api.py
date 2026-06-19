@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
 import json
 
 from backend.models.schemas import BriefInput, ProposalRead
@@ -50,6 +51,21 @@ async def get_proposal(
         
     return _format_proposal_response(proposal)
 
+
+@router.delete("/proposals/{proposal_id}", status_code=204)
+async def delete_proposal(
+    proposal_id: str,
+    session: AsyncSession = Depends(get_session)
+):
+    proposal = await session.get(Proposal, proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    await session.delete(proposal)
+    await session.commit()
+    
+    return Response(status_code=204)
+
 @router.post("/proposals/{proposal_id}/brief-card", status_code=202)
 async def create_brief_card(
     request: Request,  # Injected to access app.state.arq_pool
@@ -64,3 +80,35 @@ async def create_brief_card(
         
     job = await request.app.state.arq_pool.enqueue_job('generate_brief_card', proposal_id)
     return {"job_id": job.job_id, "status": "queued", "message": "Brief card generation started."}
+
+@router.post("/proposals/{proposal_id}/regenerate", status_code=202, response_model=ProposalRead)
+async def regenerate_proposal(
+    request: Request,
+    proposal_id: str,
+    session: AsyncSession = Depends(get_session)
+):
+    proposal = await session.get(Proposal, proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    
+    # Reset proposal fields for regeneration
+    proposal.status = ProposalStatus.QUEUED
+    proposal.error_message = None
+    proposal.client_summary = None
+    proposal.technical_proposal = None
+    proposal.features_json = None
+    proposal.total_hours = None
+    proposal.complexity_tier = None
+    proposal.brief_card = None
+    proposal.updated_at = datetime.now(timezone.utc)
+    
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    
+    job = await request.app.state.arq_pool.enqueue_job('generate_proposal', proposal.id)
+    proposal.job_id = job.job_id
+    await session.commit()
+    await session.refresh(proposal)
+    
+    return _format_proposal_response(proposal)

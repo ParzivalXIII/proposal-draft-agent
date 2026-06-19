@@ -1,11 +1,23 @@
+import json
 from fastapi import APIRouter, Request, Depends, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 import markdown
+import nh3
 
 from backend.core.db import get_session
 from backend.models.db_models import Proposal
+
+# HTML tags allowed through sanitization (nh3)
+# Used for rendering LLM-generated brief card content safely
+_ALLOWED_BRIEF_TAGS = {
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "ul", "ol", "li", "strong", "em",
+    "code", "pre", "blockquote",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "a", "hr", "br",
+}
 
 router = APIRouter(prefix="/ui", tags=["UI"])
 
@@ -43,7 +55,15 @@ async def create_proposal_ui(
     db_proposal.job_id = job.job_id
     await session.commit()
     
-    return RedirectResponse(url=f"/ui/proposals/{proposal_id}", status_code=303)
+    return Response(
+        status_code=200,
+        headers={
+            "HX-Trigger": json.dumps({
+                "proposalCreated": "",
+                "toast": {"msg": f"Proposal '{client_name}' created!", "type": "success"}
+            })
+        }
+    )
 
 # Static route MUST come before parameterized routes
 @router.get("/proposals/fragment", response_class=HTMLResponse)
@@ -65,7 +85,8 @@ async def detail(request: Request, proposal_id: str, session: AsyncSession = Dep
         
     brief_card_html = ""
     if proposal.brief_card:
-        brief_card_html = markdown.markdown(proposal.brief_card, extensions=['tables', 'fenced_code'])
+        raw_html = markdown.markdown(proposal.brief_card, extensions=['tables', 'fenced_code'])
+        brief_card_html = nh3.clean(raw_html, tags=_ALLOWED_BRIEF_TAGS)
         
     return request.app.state.templates.TemplateResponse(
         request=request,
@@ -81,10 +102,35 @@ async def status_fragment(request: Request, proposal_id: str, session: AsyncSess
         
     brief_card_html = ""
     if proposal.brief_card:
-        brief_card_html = markdown.markdown(proposal.brief_card, extensions=['tables', 'fenced_code'])
+        raw_html = markdown.markdown(proposal.brief_card, extensions=['tables', 'fenced_code'])
+        brief_card_html = nh3.clean(raw_html, tags=_ALLOWED_BRIEF_TAGS)
         
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="fragments/status.html",
         context={"proposal": proposal, "brief_card_html": brief_card_html}
+    )
+
+
+@router.delete("/proposals/{proposal_id}")
+async def delete_proposal_ui(
+    request: Request,
+    proposal_id: str,
+    session: AsyncSession = Depends(get_session)
+):
+    proposal = await session.get(Proposal, proposal_id)
+    if not proposal:
+        return HTMLResponse("Not found", status_code=404)
+    
+    await session.delete(proposal)
+    await session.commit()
+    
+    return Response(
+        status_code=200,
+        headers={
+            "HX-Trigger": json.dumps({
+                "toast": {"msg": "Proposal deleted", "type": "success"}
+            }),
+            "HX-Redirect": "/ui/"
+        }
     )

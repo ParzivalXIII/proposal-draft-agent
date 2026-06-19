@@ -1,3 +1,4 @@
+import json
 from fastapi import FastAPI
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -9,12 +10,25 @@ from backend.core.config import settings
 from backend.core.db import init_db, engine
 from backend.routers import api, ui
 
+templates = Jinja2Templates(directory="backend/templates")
+
+def _from_json(value: str) -> object:
+    """Jinja2 filter to parse a JSON string into a Python object."""
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+templates.env.filters["from_json"] = _from_json
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.arq_pool = await create_pool(
         RedisSettings(host=settings.redis_host, port=settings.redis_port)
     )
-    app.state.templates = Jinja2Templates(directory="backend/templates")
+    app.state.templates = templates
     await init_db()
     yield
     await app.state.arq_pool.close()

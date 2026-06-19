@@ -1,40 +1,200 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-6">
-    <a href="/ui/" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">&larr; Back to proposals</a>
+{# ── Brief card Alpine data ── #}
+<script>
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('briefCardActions', function() {
+            return {
+                copied: false,
+                async copyBriefCard() {
+                    var raw = document.getElementById('brief-card-raw');
+                    if (!raw) return;
+                    try {
+                        await navigator.clipboard.writeText(raw.textContent);
+                        this.copied = true;
+                        Alpine.store('toasts').add('Brief card copied!', 'success');
+                        var self = this;
+                        setTimeout(function() { self.copied = false; }, 2000);
+                    } catch(e) {
+                        Alpine.store('toasts').add('Failed to copy. Try selecting the text manually.', 'error');
+                    }
+                }
+            };
+        });
+    });
+</script>
+
+{# ── Back link ── #}
+<div class="mb-4">
+    <a href="/ui/" class="link link-primary text-sm no-underline hover:underline">
+        &larr; Back to proposals
+    </a>
 </div>
 
-<div class="bg-white shadow overflow-hidden sm:rounded-lg">
-    <div class="px-4 py-5 sm:px-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">{{ proposal.client_name }}</h3>
-        <p class="mt-1 max-w-2xl text-sm text-gray-500">{{ proposal.problem_description }}</p>
-    </div>
-    <div class="border-t border-gray-200 px-4 py-5 sm:px-6">
-        <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-3">
+{# ── Proposal Info Card ── #}
+<div class="card bg-base-100 shadow-sm border border-base-200 mb-6">
+    <div class="card-body">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-                <dt class="text-sm font-medium text-gray-500">Status</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ proposal.status | capitalize }}</dd>
+                <h1 class="card-title text-2xl">{{ proposal.client_name }}</h1>
+                <p class="text-base-content/70 mt-1">{{ proposal.problem_description }}</p>
             </div>
-            <div>
-                <dt class="text-sm font-medium text-gray-500">Complexity</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ proposal.complexity_tier or 'Pending...' }}</dd>
+            <div class="flex flex-wrap gap-2 shrink-0">
+                {% if proposal.status == 'completed' %}
+                <span class="badge badge-success">Completed</span>
+                {% elif proposal.status == 'running' %}
+                <span class="badge badge-info">
+                    <span class="loading loading-spinner loading-xs mr-1"></span>
+                    Running
+                </span>
+                {% elif proposal.status == 'failed' %}
+                <span class="badge badge-error">Failed</span>
+                {% else %}
+                <span class="badge badge-ghost">Queued</span>
+                {% endif %}
+                {% if proposal.brief_card %}
+                <span class="badge badge-accent badge-soft">Brief Ready</span>
+                {% endif %}
             </div>
-            <div>
-                <dt class="text-sm font-medium text-gray-500">Estimated Hours</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ proposal.total_hours or 'Pending...' }}</dd>
+        </div>
+
+        {# ── Stats ── #}
+        <div class="stats stats-vertical lg:stats-horizontal shadow-sm bg-base-200 mt-4">
+            <div class="stat">
+                <div class="stat-title">Status</div>
+                <div class="stat-value text-lg">
+                    {% if proposal.status == 'completed' %}
+                    <span class="badge badge-success">Completed</span>
+                    {% elif proposal.status == 'running' %}
+                    <span class="badge badge-info">Running</span>
+                    {% elif proposal.status == 'failed' %}
+                    <span class="badge badge-error">Failed</span>
+                    {% else %}
+                    <span class="badge badge-ghost">Queued</span>
+                    {% endif %}
+                </div>
+                <div class="stat-desc">
+                    {% if proposal.status == 'queued' or proposal.status == 'running' %}
+                    <span class="loading loading-dots loading-xs"></span> Processing...
+                    {% elif proposal.status == 'failed' %}
+                    {{ proposal.error_message or 'An error occurred' }}
+                    {% endif %}
+                </div>
             </div>
-        </dl>
+
+            <div class="stat">
+                <div class="stat-title">Complexity</div>
+                <div class="stat-value text-lg">
+                    {% if proposal.complexity_tier %}
+                    {{ proposal.complexity_tier }}
+                    {% else %}
+                    <div class="skeleton h-6 w-20"></div>
+                    {% endif %}
+                </div>
+                <div class="stat-desc">Estimated tier</div>
+            </div>
+
+            <div class="stat">
+                <div class="stat-title">Est. Hours</div>
+                <div class="stat-value text-lg">
+                    {% if proposal.total_hours %}
+                    {{ proposal.total_hours }}h
+                    {% else %}
+                    <div class="skeleton h-6 w-16"></div>
+                    {% endif %}
+                </div>
+                <div class="stat-desc">Total estimated effort</div>
+            </div>
+        </div>
+
+        {# ── Action Buttons ── #}
+        <div class="card-actions justify-end mt-4">
+            {% if proposal.brief_card %}
+            <div x-data="briefCardActions">
+                <button class="btn btn-sm btn-ghost" @click="copyBriefCard">
+                    <span x-show="!copied">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Copy Brief Card
+                    </span>
+                    <span x-show="copied" x-cloak>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Copied!
+                    </span>
+                </button>
+            </div>
+            {% endif %}
+            {% if proposal.status == 'failed' or proposal.status == 'completed' %}
+            <button class="btn btn-sm btn-outline btn-warning"
+                    hx-post="/api/proposals/{{ proposal.id }}/regenerate"
+                    hx-confirm="This will overwrite the current proposal. Continue?"
+                    hx-trigger="click"
+                    hx-swap="none">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Regenerate
+            </button>
+            {% endif %}
+            {# Delete button with Alpine confirmation modal #}
+            <button class="btn btn-sm btn-outline btn-error"
+                    onclick="document.getElementById('deleteModal').showModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Delete
+            </button>
+        </div>
     </div>
 </div>
 
+{# ── Delete Confirmation Modal ── #}
+<dialog id="deleteModal" class="modal">
+    <div class="modal-box">
+        <h3 class="text-lg font-bold">Delete Proposal</h3>
+        <p class="py-4 text-base-content/70">Are you sure you want to delete the proposal for <strong>{{ proposal.client_name }}</strong>? This action cannot be undone.</p>
+        <div class="modal-action">
+            <button class="btn btn-ghost" onclick="document.getElementById('deleteModal').close()">Cancel</button>
+            <button class="btn btn-error"
+                    hx-delete="/ui/proposals/{{ proposal.id }}"
+                    hx-target="body"
+                    hx-swap="innerHTML"
+                    onclick="document.getElementById('deleteModal').close()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Delete
+            </button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+{# ── Client Brief Card Section ── #}
 <div class="mt-8">
-    <h2 class="text-xl font-bold text-gray-900 mb-4">Client Brief Card</h2>
-    
-    <!-- The HTMX Polling Container -->
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-base-content">Client Brief Card</h2>
+    </div>
+
+    {# ── Raw markdown for clipboard copy (hidden) ── #}
+    {% if proposal.brief_card %}
+    <script type="text/plain" id="brief-card-raw">{{ proposal.brief_card }}</script>
+    {% endif %}
+
+    {# ── The HTMX Polling Container ── #}
     <div id="proposal-status"
-         hx-get="/ui/proposals/{{ proposal.id }}/fragment"
+         {% if proposal.status == 'completed' or proposal.status == 'failed' %}
+         hx-trigger="none"
+         {% else %}
          hx-trigger="every 2s"
+         {% endif %}
+         hx-get="/ui/proposals/{{ proposal.id }}/fragment"
          hx-swap="outerHTML">
         {% include "fragments/status.html" %}
     </div>
